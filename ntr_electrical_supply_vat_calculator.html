@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NTR ELECTRICAL SUPPLY & VAT Calculator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS Library for CSV/Excel parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    /* Custom scrollbar for suggestions dropdown */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- ==================== PASSWORD LOCK SCREEN OVERLAY ==================== -->
+  <div id="lockScreenOverlay" class="fixed inset-0 z-50 bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border border-slate-100">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 text-3xl mb-4 shadow-sm">
+        🔒
+      </div>
+      <h2 class="text-2xl font-bold text-slate-900 tracking-tight mb-1">Access Restricted</h2>
+      <p class="text-sm text-slate-500 mb-6">NTR Electrical Supply & Services<br>Please enter your password to continue.</p>
+      
+      <div class="space-y-3">
+        <input 
+          type="password" 
+          id="passInput" 
+          placeholder="••••" 
+          autofocus
+          class="w-full px-4 py-3.5 border-2 border-slate-200 rounded-2xl text-center text-lg font-semibold tracking-[0.3em] focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition-all"
+        />
+        <button 
+          id="unlockBtn" 
+          type="button"
+          class="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-semibold rounded-2xl shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+        >
+          Unlock Dashboard
+        </button>
+      </div>
+      
+      <div id="lockErrorMsg" class="hidden mt-3 text-sm font-semibold text-rose-600 bg-rose-50 py-2 px-3 rounded-xl border border-rose-100">
+        Incorrect password. Please try again.
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN APPLICATION CONTAINER ==================== -->
+  <div id="appContent" class="hidden min-h-screen flex flex-col">
+    
+    <!-- Top Sticky Navigation Header -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+        <!-- Brand Title -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+            NTR
+          </div>
+          <div>
+            <h1 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-tight">
+              NTR ELECTRICAL SUPPLY
+            </h1>
+            <p class="text-xs text-slate-500 font-medium">
+              Catalog &amp; VAT Calculator
+            </p>
+          </div>
+        </div>
+
+        <!-- Global Header Actions -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Custom File Upload Override -->
+          <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" class="hidden" />
+          <label 
+            for="excelFile" 
+            title="Upload Custom CSV/Excel File Override"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2.5 sm:px-4 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-semibold shadow-sm shadow-emerald-600/20 cursor-pointer transition-all select-none"
+          >
+            <span>📁</span>
+            <span class="hidden xs:inline sm:inline">Upload File</span>
+          </label>
+
+          <!-- Desktop View Mode Switcher (Optional Focus Toggle on >= 1024px) -->
+          <div class="hidden lg:flex items-center bg-slate-100 p-1 rounded-full border border-slate-200">
+            <button type="button" onclick="setDesktopLayout('split')" id="btnLayoutSplit" class="px-3 py-1 rounded-full text-xs font-semibold bg-white text-slate-900 shadow-sm transition-all">
+              Split View
+            </button>
+            <button type="button" onclick="setDesktopLayout('catalog')" id="btnLayoutCatalog" class="px-3 py-1 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">
+              Catalog Only
+            </button>
+            <button type="button" onclick="setDesktopLayout('vat')" id="btnLayoutVat" class="px-3 py-1 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">
+              VAT Only
+            </button>
+          </div>
+
+          <!-- Logout / Re-lock Button -->
+          <button 
+            id="logoutBtn" 
+            type="button"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2.5 sm:px-4 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs sm:text-sm font-semibold shadow-sm shadow-rose-600/20 cursor-pointer transition-all"
+          >
+            <span>🔒</span>
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile & Tablet Segmented Tab Bar (< 1024px) -->
+      <div class="lg:hidden px-4 pb-3 pt-1 max-w-7xl mx-auto">
+        <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+          <button 
+            type="button" 
+            id="mobileTabCatalog" 
+            onclick="switchMobileTab('catalog')"
+            class="py-2.5 px-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-white text-slate-900 shadow-sm transition-all"
+          >
+            <span>📦</span>
+            <span>Product Catalog</span>
+          </button>
+          <button 
+            type="button" 
+            id="mobileTabVat" 
+            onclick="switchMobileTab('vat')"
+            class="py-2.5 px-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition-all"
+          >
+            <span>🧮</span>
+            <span>VAT Calculator</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
+      <div id="workspaceGrid" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- ==================== MODULE 1: DATABASE CATALOG ==================== -->
+        <section id="catalogSection" class="lg:col-span-8 space-y-4">
+          
+          <!-- Active Database Info Bar -->
+          <div id="fileInfoCard" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="text-sm">
+                <span class="font-semibold text-slate-900">Active Source: </span>
+                <span id="fileNameDisplay" class="text-slate-600 break-all">GitHub Database Link</span>
+              </div>
+              <div id="lastUpdatedDisplay" class="text-xs text-slate-500 flex items-center gap-1">
+                🕒 Last Updated: Checking...
+              </div>
+            </div>
+            <div id="statusMessage" class="text-xs sm:text-sm font-semibold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200/60">
+              Fetching from GitHub...
+            </div>
+          </div>
+
+          <!-- Smart Search Bar Card -->
+          <div id="searchCard" class="hidden bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <label for="searchInput" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              Smart Search Items
+            </label>
+            <div class="relative w-full">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+              </div>
+              <input 
+                type="text" 
+                id="searchInput" 
+                placeholder="Type to search products, categories, or keywords..." 
+                autocomplete="off"
+                class="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition-all"
+              />
+              <button 
+                type="button" 
+                id="clearSearchBtn" 
+                title="Clear search"
+                class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 hover:text-slate-900 items-center justify-center text-base font-bold transition-colors cursor-pointer"
+              >
+                &times;
+              </button>
+
+              <!-- Autocomplete Suggestions Dropdown -->
+              <div id="searchSuggestions" class="hidden custom-scrollbar absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-40 max-h-64 overflow-y-auto divide-y divide-slate-100"></div>
+            </div>
+          </div>
+
+          <!-- Search Results Grid Card -->
+          <div id="tableContainer" class="hidden bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+              <h2 class="text-base sm:text-lg font-bold text-slate-900">Products</h2>
+              <span id="rowCount" class="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg"></span>
+            </div>
+
+            <!-- Responsive Product Cards Grid -->
+            <div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3.5"></div>
+
+            <!-- Pagination Controls -->
+            <div id="paginationBar" class="hidden mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-slate-500">
+              <span id="pageInfo" class="font-medium">Page 1</span>
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-center">
+                <button 
+                  id="prevPageBtn" 
+                  type="button"
+                  class="flex-1 sm:flex-initial px-4 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none rounded-xl font-semibold text-slate-700 transition-colors cursor-pointer"
+                >
+                  ← Previous
+                </button>
+                <button 
+                  id="nextPageBtn" 
+                  type="button"
+                  class="flex-1 sm:flex-initial px-4 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none rounded-xl font-semibold text-slate-700 transition-colors cursor-pointer"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE 2: VAT CALCULATOR ==================== -->
+        <aside id="vatSection" class="hidden lg:block lg:col-span-4 lg:sticky lg:top-24">
+          <div class="w-full max-w-md mx-auto bg-white rounded-3xl shadow-md border border-slate-200/80 p-5 sm:p-6 space-y-5">
+            
+            <!-- Calculator Header -->
+            <div class="text-center space-y-1">
+              <div class="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 mb-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 class="text-xl font-bold tracking-tight text-slate-900">VAT Calculator</h2>
+              <p class="text-xs font-medium text-slate-500">NTR ELECTRICAL REF &amp; AIRCONDITION SERVICES</p>
+            </div>
+
+            <!-- Calculator Inputs -->
+            <div class="space-y-4">
+              <!-- Gross Invoice Amount -->
+              <div class="space-y-1.5">
+                <label for="invoiceAmount" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Invoice Amount (Gross)
+                </label>
+                <div class="relative rounded-2xl shadow-sm">
+                  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 font-semibold text-lg">
+                    ₱
+                  </div>
+                  <input 
+                    type="number" 
+                    id="invoiceAmount" 
+                    step="any"
+                    inputmode="decimal"
+                    placeholder="0.00" 
+                    class="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg font-semibold text-slate-900 transition-all"
+                  >
+                </div>
+              </div>
+
+              <!-- Quick Amount Presets -->
+              <div class="grid grid-cols-4 gap-2">
+                <button type="button" onclick="setAmount(1000)" class="py-2 px-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition-all cursor-pointer">₱1,000</button>
+                <button type="button" onclick="setAmount(5000)" class="py-2 px-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition-all cursor-pointer">₱5,000</button>
+                <button type="button" onclick="setAmount(10000)" class="py-2 px-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition-all cursor-pointer">₱10,000</button>
+                <button type="button" onclick="clearAmount()" class="py-2 px-2 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 transition-all cursor-pointer">Clear</button>
+              </div>
+
+              <!-- Optional Withholding Tax (Form 2307) -->
+              <div class="space-y-1.5 pt-3 border-t border-slate-100">
+                <div class="flex items-center justify-between">
+                  <label for="whtAmount" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Less Withholding Tax (Form 2307)
+                  </label>
+                  <span class="text-[11px] text-slate-400 font-medium">Optional</span>
+                </div>
+                <div class="relative rounded-2xl shadow-sm">
+                  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 font-semibold text-lg">
+                    ₱
+                  </div>
+                  <input 
+                    type="number" 
+                    id="whtAmount" 
+                    step="any"
+                    inputmode="decimal"
+                    placeholder="0.00" 
+                    class="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg font-semibold text-slate-900 transition-all"
+                  >
+                </div>
+              </div>
+            </div>
+
+            <hr class="border-slate-100">
+
+            <!-- Real-Time Calculation Results -->
+            <div class="space-y-2.5">
+              <!-- VAT Sales Card -->
+              <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center justify-between gap-2">
+                <div>
+                  <span class="block text-xs font-bold uppercase tracking-wider text-indigo-600">VAT Sales</span>
+                  <span class="text-[11px] text-slate-500">Invoice Amount ÷ 1.12</span>
+                </div>
+                <div id="vatSalesResult" class="text-base sm:text-lg font-bold text-indigo-700 text-right">
+                  ₱0.00
+                </div>
+              </div>
+
+              <!-- Add: 12% VAT Card -->
+              <div class="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between gap-2">
+                <div>
+                  <span class="block text-xs font-bold uppercase tracking-wider text-emerald-600">Add: 12% VAT</span>
+                  <span class="text-[11px] text-slate-500">Invoice Amount − VAT Sales</span>
+                </div>
+                <div id="vatAmountResult" class="text-base sm:text-lg font-bold text-emerald-700 text-right">
+                  ₱0.00
+                </div>
+              </div>
+
+              <!-- Amount Due Card -->
+              <div class="p-4 rounded-2xl bg-slate-900 text-white shadow-md flex items-center justify-between gap-2">
+                <div>
+                  <span class="block text-xs font-bold uppercase tracking-wider text-slate-300">Amount Due</span>
+                  <span class="text-[11px] text-slate-400">Invoice Amount − Withholding Tax</span>
+                </div>
+                <div id="netAmountResult" class="text-lg sm:text-xl font-bold text-emerald-400 text-right">
+                  ₱0.00
+                </div>
+              </div>
+            </div>
+
+            <!-- Collapsible Formulas Breakdown -->
+            <details class="text-xs text-slate-500 cursor-pointer pt-1">
+              <summary class="font-semibold hover:text-slate-800 transition-colors select-none">View Formulas</summary>
+              <div class="mt-2 space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200/70 text-[11px] leading-relaxed text-slate-600">
+                <p>• <strong>VAT Sales</strong> = Invoice Amount ÷ 1.12</p>
+                <p>• <strong>VAT Amount</strong> = Invoice Amount − VAT Sales</p>
+                <p>• <strong>Amount Due</strong> = Invoice Amount − Withholding Tax (Form 2307)</p>
+              </div>
+            </details>
+
+          </div>
+        </aside>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ==================== UNIFIED JAVASCRIPT LOGIC ==================== -->
+  <script>
+    /* ==========================================================================
+       1. PASSWORD LOCK SCREEN & NAVIGATION CONTROLLER
+       ========================================================================== */
+    const APP_PASSWORD = "6871";
+
+    const lockOverlay = document.getElementById('lockScreenOverlay');
+    const appContent = document.getElementById('appContent');
+    const passInput = document.getElementById('passInput');
+    const unlockBtn = document.getElementById('unlockBtn');
+    const lockErrorMsg = document.getElementById('lockErrorMsg');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    let isAppInitialized = false;
+    let activeMobileTab = 'catalog';
+    let desktopLayoutMode = 'split';
+
+    function lockApp() {
+      appContent.classList.add('hidden');
+      lockOverlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+      passInput.value = '';
+      lockErrorMsg.classList.add('hidden');
+      setTimeout(() => passInput.focus(), 50);
+    }
+
+    function checkPassword() {
+      if (passInput.value === APP_PASSWORD) {
+        lockOverlay.classList.add('opacity-0', 'pointer-events-none');
+        setTimeout(() => {
+          lockOverlay.classList.add('hidden');
+          appContent.classList.remove('hidden');
+          applyResponsiveLayout();
+          if (!isAppInitialized) {
+            initCatalogApp();
+            isAppInitialized = true;
+          }
+        }, 250);
+      } else {
+        lockErrorMsg.classList.remove('hidden');
+        passInput.value = '';
+        passInput.focus();
+      }
+    }
+
+    unlockBtn.addEventListener('click', checkPassword);
+    passInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') checkPassword();
+    });
+    logoutBtn.addEventListener('click', lockApp);
+
+    // Responsive Layout Management (Mobile/Tablet Tabs vs Desktop Split/Focus)
+    const catalogSection = document.getElementById('catalogSection');
+    const vatSection = document.getElementById('vatSection');
+    const mobileTabCatalog = document.getElementById('mobileTabCatalog');
+    const mobileTabVat = document.getElementById('mobileTabVat');
+
+    function switchMobileTab(tab) {
+      activeMobileTab = tab;
+      applyResponsiveLayout();
+    }
+
+    function setDesktopLayout(mode) {
+      desktopLayoutMode = mode;
+      // Update desktop toggle button styles
+      const btns = {
+        split: document.getElementById('btnLayoutSplit'),
+        catalog: document.getElementById('btnLayoutCatalog'),
+        vat: document.getElementById('btnLayoutVat')
+      };
+      Object.entries(btns).forEach(([key, btn]) => {
+        if (!btn) return;
+        if (key === mode) {
+          btn.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-white text-slate-900 shadow-sm transition-all';
+        } else {
+          btn.className = 'px-3 py-1 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+        }
+      });
+      applyResponsiveLayout();
+    }
+
+    function applyResponsiveLayout() {
+      const isDesktop = window.innerWidth >= 1024;
+
+      if (!isDesktop) {
+        // Mobile & Tablet (< 1024px): Tabbed experience
+        catalogSection.className = activeMobileTab === 'catalog' ? 'block space-y-4' : 'hidden';
+        vatSection.className = activeMobileTab === 'vat' ? 'block' : 'hidden';
+
+        if (activeMobileTab === 'catalog') {
+          mobileTabCatalog.className = 'py-2.5 px-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-white text-slate-900 shadow-sm transition-all';
+          mobileTabVat.className = 'py-2.5 px-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+        } else {
+          mobileTabVat.className = 'py-2.5 px-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-white text-slate-900 shadow-sm transition-all';
+          mobileTabCatalog.className = 'py-2.5 px-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+          setTimeout(() => document.getElementById('invoiceAmount').focus(), 50);
+        }
+      } else {
+        // Desktop (>= 1024px): Split View or Focused Single View
+        if (desktopLayoutMode === 'split') {
+          catalogSection.className = 'lg:col-span-8 space-y-4 block';
+          vatSection.className = 'lg:col-span-4 lg:sticky lg:top-24 block';
+        } else if (desktopLayoutMode === 'catalog') {
+          catalogSection.className = 'lg:col-span-12 space-y-4 block';
+          vatSection.className = 'hidden';
+        } else if (desktopLayoutMode === 'vat') {
+          catalogSection.className = 'hidden';
+          vatSection.className = 'lg:col-span-12 flex justify-center block';
+        }
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (!appContent.classList.contains('hidden')) {
+        applyResponsiveLayout();
+      }
+    });
+
+
+    /* ==========================================================================
+       2. MODULE 1: DATABASE CATALOG LOGIC
+       ========================================================================== */
+    const GITHUB_DATABASE_URL = "https://raw.githubusercontent.com/neiljohnrespicio/shopprice/refs/heads/main/shop.CSV";
+    const GITHUB_COMMITS_API_URL = "https://api.github.com/repos/neiljohnrespicio/shopprice/commits?path=shop.CSV&page=1&per_page=1";
+
+    const EMBEDDED_FALLBACK = [
+      ["Item Name", "Description", "Category"],
+      ["Fallback Item", "Used because GitHub link didn't load or is pending", "General"]
+    ];
+
+    let parsedRows = [];
+    let filteredRows = [];
+    const PAGE_SIZE = 40;
+    let currentPage = 1;
+    let debounceTimer = null;
+    let colHeaders = [];
+
+    function formatDateTime(dateInput) {
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return 'Unknown';
+      return d.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+
+    function fetchGithubLastUpdated() {
+      const lastUpdatedEl = document.getElementById('lastUpdatedDisplay');
+      lastUpdatedEl.textContent = '🕒 Last Updated: Checking...';
+
+      fetch(GITHUB_COMMITS_API_URL)
+        .then(res => {
+          if (!res.ok) throw new Error('GitHub API error');
+          return res.json();
+        })
+        .then(commits => {
+          if (Array.isArray(commits) && commits.length > 0 && commits[0].commit && commits[0].commit.committer) {
+            const commitDate = commits[0].commit.committer.date;
+            lastUpdatedEl.innerHTML = `🕒 Last Updated: <strong class="text-slate-800">${formatDateTime(commitDate)}</strong>`;
+          } else {
+            lastUpdatedEl.textContent = '🕒 Last Updated: Unavailable';
+          }
+        })
+        .catch(() => {
+          lastUpdatedEl.textContent = '🕒 Last Updated: Unavailable';
+        });
+    }
+
+    function initCatalogApp() {
+      const fileNameDisplay = document.getElementById('fileNameDisplay');
+      fileNameDisplay.textContent = GITHUB_DATABASE_URL.split('/').pop().split('?')[0] || 'GitHub Database';
+
+      fetchGithubLastUpdated();
+
+      fetch(GITHUB_DATABASE_URL)
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          const lowerUrl = GITHUB_DATABASE_URL.toLowerCase();
+          if (lowerUrl.endsWith('.csv') || lowerUrl.includes('format=csv')) {
+            return response.text().then(text => {
+              const workbook = XLSX.read(text, { type: 'string' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              processRawRows(rawRows, 'GitHub Raw Link');
+            });
+          } else {
+            return response.arrayBuffer().then(buffer => {
+              const data = new Uint8Array(buffer);
+              const workbook = XLSX.read(data, { type: 'array' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              processRawRows(rawRows, 'GitHub Raw Link');
+            });
+          }
+        })
+        .catch(() => {
+          showCatalogError('Failed to load from GitHub link. Loaded fallback data instead.');
+          document.getElementById('lastUpdatedDisplay').textContent = '🕒 Last Updated: N/A (Fallback Data)';
+          processRawRows(EMBEDDED_FALLBACK, 'Embedded Fallback Data');
+        });
+    }
+
+    document.getElementById('excelFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Switch to catalog view automatically on mobile if user uploads a file
+      if (window.innerWidth < 1024 && activeMobileTab !== 'catalog') {
+        switchMobileTab('catalog');
+      }
+
+      const fileNameDisplay = document.getElementById('fileNameDisplay');
+      const lastUpdatedDisplay = document.getElementById('lastUpdatedDisplay');
+      fileNameDisplay.textContent = file.name;
+      lastUpdatedDisplay.innerHTML = `🕒 File Modified: <strong class="text-slate-800">${formatDateTime(file.lastModified)}</strong>`;
+
+      const reader = new FileReader();
+      const isCsv = file.name.toLowerCase().endsWith('.csv');
+
+      if (isCsv) {
+        reader.onload = function(event) {
+          requestAnimationFrame(() => {
+            try {
+              const textData = event.target.result;
+              const workbook = XLSX.read(textData, { type: 'string' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              processRawRows(rawRows, file.name);
+            } catch (error) {
+              showCatalogError('Error reading CSV file.');
+            }
+          });
+        };
+        reader.readAsText(file, 'UTF-8');
+      } else {
+        reader.onload = function(event) {
+          requestAnimationFrame(() => {
+            try {
+              const data = new Uint8Array(event.target.result);
+              const workbook = XLSX.read(data, { type: 'array' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              processRawRows(rawRows, file.name);
+            } catch (error) {
+              showCatalogError('Error reading Excel file.');
+            }
+          });
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    });
+
+    function showCatalogError(msg) {
+      const statusMsg = document.getElementById('statusMessage');
+      statusMsg.className = 'text-xs sm:text-sm font-semibold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200/60';
+      statusMsg.textContent = msg;
+    }
+
+    function isPriceValue(val) {
+      if (!val) return false;
+      const str = String(val).trim();
+      return /^[₱$€£¥]?\s*\d[\d,.]*$/.test(str);
+    }
+
+    function isUnitMeasurement(val) {
+      if (!val) return false;
+      const str = String(val).trim().toLowerCase();
+      const unitPattern = /^(pc|pcs|piece|pieces|unit|units|set|sets|pair|pairs|box|boxes|bx|pack|packs|pk|pck|roll|rolls|rl|meter|meters|m|cm|mm|ft|feet|inch|inches|in|yd|yard|yards|kg|kgs|kilo|kilos|g|gm|gms|gram|grams|mg|lb|lbs|oz|l|liter|liters|ml|gal|gallon|gallons|bag|bags|bundle|bundles|coil|coils|can|cans|bottle|bottles|tube|tubes|sheet|sheets|dozen|doz|pad|pads|spool|spools|drum|drums|case|cases|bar|bars|length|lengths|watt|watts|w|kw|amp|amps|a|volt|volts|v|ohm|ohms)$/i;
+      return unitPattern.test(str);
+    }
+
+    function stripUnitFromText(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/\b(pcs?|pieces?|units?|sets?|pairs?|box(?:es)?|bx|packs?|pks?|pck|rolls?|rls?|meters?|cm|mm|feet|ft|inch(?:es)?|yards?|yds?|kgs?|kilos?|gms?|grams?|mg|lbs?|oz|liters?|ml|gallons?|gal|bags?|bundles?|coils?|cans?|bottles?|tubes?|sheets?|doz(?:en)?|pads?|spools?|drums?|cases?|bars?|lengths?|watts?|kw|amps?|volts?|ohms?)\b\.?/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    function processRawRows(rawRows, sourceName) {
+      const statusMsg = document.getElementById('statusMessage');
+      const tableContainer = document.getElementById('tableContainer');
+      const searchCard = document.getElementById('searchCard');
+
+      parsedRows = [];
+      filteredRows = [];
+      colHeaders = [];
+      currentPage = 1;
+
+      if (!rawRows || rawRows.length === 0) {
+        showCatalogError('Database is empty.');
+        return;
+      }
+
+      const headerRow = rawRows[0] || [];
+      for (let colIndex = 0; colIndex < 4; colIndex++) {
+        colHeaders.push(
+          headerRow[colIndex] !== undefined && headerRow[colIndex] !== '' 
+            ? headerRow[colIndex] 
+            : `Column ${String.fromCharCode(65 + colIndex)}`
+        );
+      }
+
+      const bodyRows = rawRows.slice(1);
+      parsedRows = bodyRows.map((row, idx) => {
+        const rawA = row[0] !== undefined ? String(row[0]) : '';
+        const rawB = row[1] !== undefined ? String(row[1]) : '';
+        const rawC = row[2] !== undefined ? String(row[2]) : '';
+        const rawD = row[3] !== undefined ? String(row[3]) : '';
+
+        const colA = stripUnitFromText(rawA);
+        const colB = stripUnitFromText(rawB);
+        const colC = (!isPriceValue(rawC) && !isUnitMeasurement(rawC)) ? stripUnitFromText(rawC) : '';
+        const colD = (!isPriceValue(rawD) && !isUnitMeasurement(rawD)) ? stripUnitFromText(rawD) : '';
+
+        return {
+          id: idx,
+          colA,
+          colB,
+          colC,
+          colD,
+          searchStr: (colA + ' ' + colB + ' ' + colC + ' ' + colD).toLowerCase()
+        };
+      }).filter(item => item.colA || item.colB || item.colC || item.colD);
+
+      filteredRows = [...parsedRows];
+      statusMsg.className = 'text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60';
+      statusMsg.textContent = 'Loaded successfully from ' + sourceName + '!';
+
+      renderTablePage();
+
+      tableContainer.classList.remove('hidden');
+      searchCard.classList.remove('hidden');
+    }
+
+    // Smart Search & Suggestions Logic
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const suggestionsBox = document.getElementById('searchSuggestions');
+
+    function updateClearButtonVisibility() {
+      if (searchInput.value.length > 0) {
+        clearSearchBtn.classList.remove('hidden');
+        clearSearchBtn.classList.add('flex');
+      } else {
+        clearSearchBtn.classList.add('hidden');
+        clearSearchBtn.classList.remove('flex');
+      }
+    }
+
+    function clearSearch(shouldFocus = false) {
+      clearTimeout(debounceTimer);
+      searchInput.value = '';
+      suggestionsBox.classList.add('hidden');
+      updateClearButtonVisibility();
+
+      triggerSearch('');
+      if (shouldFocus) searchInput.focus();
+    }
+
+    clearSearchBtn.addEventListener('click', () => clearSearch(true));
+
+    searchInput.addEventListener('input', function(e) {
+      updateClearButtonVisibility();
+      const keyword = e.target.value.toLowerCase().trim();
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        triggerSearch(keyword);
+        updateSuggestions(keyword);
+      }, 150);
+    });
+
+    searchInput.addEventListener('focus', function() {
+      if (this.value.trim().length > 0) {
+        updateSuggestions(this.value.toLowerCase().trim());
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#searchCard')) {
+        suggestionsBox.classList.add('hidden');
+      }
+    });
+
+    function triggerSearch(keyword) {
+      if (!keyword) {
+        filteredRows = [...parsedRows];
+      } else {
+        filteredRows = parsedRows.filter(item => item.searchStr.includes(keyword));
+      }
+      currentPage = 1;
+      renderTablePage();
+    }
+
+    function updateSuggestions(keyword) {
+      if (!keyword || keyword.length < 1) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      const matches = parsedRows.filter(item => item.colA.toLowerCase().includes(keyword)).slice(0, 6);
+
+      if (matches.length === 0) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      suggestionsBox.innerHTML = '';
+      matches.forEach(match => {
+        const div = document.createElement('div');
+        div.className = 'px-4 py-2.5 text-sm cursor-pointer flex items-center justify-between gap-2 hover:bg-slate-50 hover:text-emerald-700 transition-colors';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'font-semibold text-slate-800 truncate';
+        nameSpan.textContent = match.colA;
+        div.appendChild(nameSpan);
+
+        if (match.colC) {
+          const catSpan = document.createElement('span');
+          catSpan.className = 'text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md shrink-0 font-medium';
+          catSpan.textContent = match.colC;
+          div.appendChild(catSpan);
+        }
+
+        div.onclick = () => {
+          searchInput.value = match.colA;
+          updateClearButtonVisibility();
+          suggestionsBox.classList.add('hidden');
+          triggerSearch(match.colA.toLowerCase());
+        };
+
+        suggestionsBox.appendChild(div);
+      });
+
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    function renderTablePage() {
+      const productGrid = document.getElementById('productGrid');
+      const rowCountEl = document.getElementById('rowCount');
+      const pageInfoEl = document.getElementById('pageInfo');
+      const paginationBar = document.getElementById('paginationBar');
+      const prevBtn = document.getElementById('prevPageBtn');
+      const nextBtn = document.getElementById('nextPageBtn');
+
+      productGrid.innerHTML = '';
+
+      const totalItems = filteredRows.length;
+      const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const startIndex = (currentPage - 1) * PAGE_SIZE;
+      const endIndex = Math.min(startIndex + PAGE_SIZE, totalItems);
+      const pageSlice = filteredRows.slice(startIndex, endIndex);
+
+      if (pageSlice.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'col-span-full py-10 text-center text-slate-500 text-sm';
+        emptyDiv.textContent = 'No matching products found.';
+        productGrid.appendChild(emptyDiv);
+      } else {
+        const fragment = document.createDocumentFragment();
+
+        pageSlice.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'bg-slate-50/60 hover:bg-white border border-slate-200/80 hover:border-emerald-300 rounded-2xl p-4 flex flex-col justify-between gap-2 shadow-xs hover:shadow-md transition-all';
+
+          const infoDiv = document.createElement('div');
+          infoDiv.className = 'space-y-1.5';
+
+          const title = document.createElement('h4');
+          title.className = 'text-sm sm:text-base font-bold text-slate-900 break-words leading-snug';
+          title.textContent = item.colA || 'Unnamed Item';
+          infoDiv.appendChild(title);
+
+          if (item.colB) {
+            const desc = document.createElement('p');
+            desc.className = 'text-xs sm:text-sm text-slate-600 leading-relaxed';
+            desc.textContent = item.colB;
+            infoDiv.appendChild(desc);
+          }
+
+          const metaDiv = document.createElement('div');
+          metaDiv.className = 'flex flex-wrap gap-1.5 pt-1';
+          if (item.colC) {
+            const tag = document.createElement('span');
+            tag.className = 'bg-slate-200/70 text-slate-700 px-2.5 py-0.5 rounded-md text-xs font-medium';
+            tag.textContent = item.colC;
+            metaDiv.appendChild(tag);
+          }
+          if (item.colD) {
+            const tag = document.createElement('span');
+            tag.className = 'bg-emerald-100/70 text-emerald-800 px-2.5 py-0.5 rounded-md text-xs font-medium';
+            tag.textContent = item.colD;
+            metaDiv.appendChild(tag);
+          }
+          if (metaDiv.children.length > 0) {
+            infoDiv.appendChild(metaDiv);
+          }
+
+          card.appendChild(infoDiv);
+          fragment.appendChild(card);
+        });
+
+        productGrid.appendChild(fragment);
+      }
+
+      rowCountEl.textContent = `${totalItems} total item(s)`;
+
+      if (totalItems > PAGE_SIZE) {
+        paginationBar.classList.remove('hidden');
+        pageInfoEl.textContent = `Page ${currentPage} of ${totalPages} (${startIndex + 1}-${endIndex} of ${totalItems})`;
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage === totalPages;
+      } else {
+        paginationBar.classList.add('hidden');
+      }
+    }
+
+    document.getElementById('prevPageBtn').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderTablePage();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+    document.getElementById('nextPageBtn').addEventListener('click', () => {
+      const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE);
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderTablePage();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+
+    /* ==========================================================================
+       3. MODULE 2: VAT CALCULATOR LOGIC
+       ========================================================================== */
+    const invoiceInput = document.getElementById('invoiceAmount');
+    const whtInput = document.getElementById('whtAmount');
+    const vatSalesResult = document.getElementById('vatSalesResult');
+    const vatAmountResult = document.getElementById('vatAmountResult');
+    const netAmountResult = document.getElementById('netAmountResult');
+
+    // Currency formatter (Philippine Peso)
+    const formatter = new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    function calculateVAT() {
+      const invoiceVal = parseFloat(invoiceInput.value) || 0;
+      const whtVal = parseFloat(whtInput.value) || 0;
+
+      if (invoiceVal <= 0) {
+        vatSalesResult.textContent = formatter.format(0);
+        vatAmountResult.textContent = formatter.format(0);
+        netAmountResult.textContent = formatter.format(0);
+        return;
+      }
+
+      // Formula 1: VAT Sales = Invoice Amount / 1.12
+      const vatSales = invoiceVal / 1.12;
+
+      // Formula 2: VAT Amount = Invoice Amount - VAT Sales
+      const vatAmount = invoiceVal - vatSales;
+
+      // Formula 3: Amount Due = Invoice Amount - Withholding Tax
+      const netPayable = invoiceVal - whtVal;
+
+      // Update UI
+      vatSalesResult.textContent = formatter.format(vatSales);
+      vatAmountResult.textContent = formatter.format(vatAmount);
+      netAmountResult.textContent = formatter.format(netPayable);
+    }
+
+    function setAmount(val) {
+      invoiceInput.value = val;
+      calculateVAT();
+      invoiceInput.focus();
+    }
+
+    function clearAmount() {
+      invoiceInput.value = '';
+      whtInput.value = '';
+      calculateVAT();
+      invoiceInput.focus();
+    }
+
+    invoiceInput.addEventListener('input', calculateVAT);
+    whtInput.addEventListener('input', calculateVAT);
+  </script>
+
+</body>
+</html>
